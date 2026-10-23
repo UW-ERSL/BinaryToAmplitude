@@ -38,11 +38,33 @@ print(checks, f"{err:.2e}", tc.tree.toffoli())
 
 | script | reproduces | time |
 |---|---|---|
-| `scripts/verify_counts.py` | Sec. 5: Toffoli and work-qubit counts asserted against the gate lists; work register returns to zero | seconds |
-| `scripts/table_cost.py` | Table 1 | seconds |
-| `scripts/check_lemma.py` | Lemma 2: every inequality of the proof on random integer vectorings | seconds |
-| `scripts/example_laplacian_symbol.py` | Sec. 6, Example 1 (gradient symbol of the finite-difference Laplacian, d = 2 and 3) | about 1 minute |
-| `scripts/example_stencil_rows.py` | Sec. 6, Example 2 (row states of a variable-coefficient stencil) | seconds |
+| `verify_counts.py` | Sec. 5: Toffoli and work-qubit counts asserted against the gate lists; work register returns to zero | seconds |
+| `table_cost.py` | Table 1 | seconds |
+| `check_lemma.py` | Lemma 2: every inequality of the proof on random integer vectorings | seconds |
+| `example_laplacian_symbol.py` | Sec. 6, Example 1 (gradient symbol of the finite-difference Laplacian, d = 2 and 3) | about 1 minute |
+| `example_stencil_rows.py` | Sec. 6, Example 2 (row states of a variable-coefficient stencil) | seconds |
+| `check_options.py` | Options: known-angle nodes and the parameters g, G (counts, accuracy, overflow detection) | about 1 minute |
+
+## Options
+
+Two options reduce the cost for a specific application.
+
+1. **Known-angle nodes:** `known={(q, p): theta_c}` declares that node
+   `(q, p)` has the same angle for every index, that is,
+   rho_right = tan(theta_c) rho_left, with cos(theta_c) >= 1/sqrt 2 (order the
+   children so). The node needs no vectoring: its output is
+   (K / cos theta_c) x_left, formed by shifts and additions over the signed
+   digits of the constant, and its rotation is the fixed R(theta_c). At the
+   leaf level the right register is not read. `signed=[(q, p), ...]` gives
+   such a leaf node the sign flag when its left entry may be negative.
+2. **Guard and integer bits:** `g` (default ceil(log2 F)) and `G` (default
+   ceil(log2(K^L sqrt m)) + 2) are parameters. The simulation reports
+   `no_overflow`, which checks every node output.
+
+```python
+tc = TreeCircuit(L=2, F=45, g=0, G=4, known={(1, 1): np.pi / 4})
+print(tc.tree.toffoli(), tc.tree.rotation_counts())   # 18624, 90 ctrl Ry, 3 fixed, 1 flag Z
+```
 
 ## Package
 

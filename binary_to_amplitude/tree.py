@@ -19,8 +19,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from .revcirc import (Circuit, BitSim, copy_view, shl, load_select,
-                      cordic_rotate, cordic_vector, cordic_gain, to_int, reverse)
+from .revcirc import (Circuit, BitSim, copy_view, shl, shift, add_view, csd,
+                      load_select, cordic_rotate, cordic_vector, cordic_gain,
+                      to_int, reverse)
 
 
 def default_guard(F):
@@ -44,7 +45,23 @@ def _toffoli(gates):
 # the circuit R (arithmetic stage), on an existing circuit
 # ==========================================================================
 class Tree:
-    def __init__(self, c, regs, F, g=None, G=None):
+    """The circuit R on caller registers `regs` (m = 2^L of them).
+
+    Options:
+      g      guard bits (internal fractional bits F' = F + g), default ceil(log2 F);
+      G      integer bits of the working registers, sign included, default
+             range_bits(L); the simulation checks that no value overflows;
+      known  {(q, p): theta_c} declares node (q, p) a known-angle node: the
+             caller guarantees rho_right = tan(theta_c) rho_left for every
+             index, with cos(theta_c) >= 1/sqrt 2. The node has no vectoring;
+             its output is (K / cos theta_c) x_left, by shifts and additions
+             over the signed digits of the constant, and its rotation is the
+             fixed R(theta_c). At the leaf level the right register is not read.
+      signed nodes in `known` at the leaf level whose left entry may be
+             negative; they get the sign flag of a leaf pair.
+    """
+
+    def __init__(self, c, regs, F, g=None, G=None, known=None, signed=()):
         m = len(regs)
         L = int(np.log2(m))
         assert 2 ** L == m, "pad with zero registers to a power of 2"
@@ -54,34 +71,48 @@ class Tree:
         self.I = self.Fi
         self.G = range_bits(L) if G is None else G
         self.W = W = self.Fi + self.G
+        self.known = dict(known or {})
+        for (q, p), th in self.known.items():
+            assert np.cos(th) >= 1 / np.sqrt(2) - 1e-12, "order children so cos >= 1/sqrt 2"
+            assert q == L - 1 or th >= 0, "partial norms are nonnegative: theta_c in [0, pi/4]"
+        self.signed = set(signed)
+        K = cordic_gain(self.I)
         n0, g0 = c.n, len(c.gates)
 
-        # working copies, shifted by g (CNOT only)
+        # working copies, shifted by g (CNOT only); a known leaf node reads its left entry only
+        skip = {2 * p + 1 for (q, p) in self.known if q == L - 1}
         xs = []
-        for r in regs:
+        for l, r in enumerate(regs):
+            if l in skip:
+                xs.append(None)
+                continue
             x = c.alloc(W)
             copy_view(c, shl(r + [r[-1]] * (W - len(r)), self.g), x)
             xs.append(x)
 
-        # leaf pairs: sign flag, then vectoring
-        self.flags, self.dbits = {}, {}
-        cur = []
-        for p in range(m // 2):
-            x, y = xs[2 * p], xs[2 * p + 1]
-            f = c.alloc(1)[0]
-            c.cx(x[-1], f)
-            for j in range(W):
-                c.cx(f, x[j]); c.cx(f, y[j])     # (x, y) <- ~(x, y) = -(x, y) - ulp
-            self.flags[p] = f
-            self.dbits[(L - 1, p)] = cordic_vector(c, x, y, self.I)
-            cur.append(x)
-
-        # internal nodes, leaves to root, in place on the children's x registers
-        for q in range(L - 2, -1, -1):
+        self.flags, self.dbits, self.digits, self.marks = {}, {}, {}, []
+        cur = xs
+        for q in range(L - 1, -1, -1):
             nxt = []
             for p in range(2 ** q):
-                self.dbits[(q, p)] = cordic_vector(c, cur[2 * p], cur[2 * p + 1], self.I)
-                nxt.append(cur[2 * p])
+                x, y = cur[2 * p], cur[2 * p + 1]
+                leaf = q == L - 1
+                if leaf and ((q, p) not in self.known or (q, p) in self.signed):
+                    f = c.alloc(1)[0]            # sign flag: (x, y) <- ~(x, y) = -(x, y) - ulp
+                    c.cx(x[-1], f)
+                    for j in range(W):
+                        c.cx(f, x[j])
+                        if y is not None:
+                            c.cx(f, y[j])
+                    self.flags[p] = f
+                if (q, p) in self.known:         # known-angle node: constant product
+                    M = K / np.cos(self.known[(q, p)])
+                    out, self.digits[(q, p)] = _const_product(c, x, M, self.Fi)
+                    nxt.append(out)
+                else:                            # vectoring, in place on the children's x registers
+                    self.dbits[(q, p)] = cordic_vector(c, x, y, self.I)
+                    nxt.append(x)
+                self.marks.append((len(c.gates), (q, p), nxt[-1]))
             cur = nxt
         self.root = cur[0]
         self.gate_range = (g0, len(c.gates))
@@ -89,15 +120,30 @@ class Tree:
 
     # -- decoding ---------------------------------------------------------------
     def angles(self, sim):
-        """Node angles theta = A - 2 sum_i d_i alpha_i (+ pi f at the leaves)."""
+        """Node angles: A - 2 sum_i d_i alpha_i at vectoring nodes, theta_c at
+        known nodes, plus pi f where a leaf sign flag is set."""
         al = np.arctan(2.0 ** -np.arange(self.I))
         th = {}
         for (q, p), bits in self.dbits.items():
-            t = sum((1 - 2 * sim.get_bits(d)) * a for d, a in zip(bits, al))
-            if q == self.L - 1:
-                t = t + np.pi * sim.get_bits(self.flags[p])
-            th[(q, p)] = t
+            th[(q, p)] = sum((1 - 2 * sim.get_bits(d)) * a for d, a in zip(bits, al))
+        for node, t in self.known.items():
+            th[node] = np.full(sim.B, float(t))
+        for p, f in self.flags.items():
+            th[(self.L - 1, p)] = th[(self.L - 1, p)] + np.pi * sim.get_bits(f)
         return th
+
+    def run_checked(self, sim, gates, start):
+        """Run the arithmetic gates[start:] and check, when each node finishes,
+        that its output lies in [0, 2^(G-1)), so no computed value wrapped.
+        Returns True if no output overflowed."""
+        ok, pos = True, start
+        for end, _, reg in self.marks:
+            sim.run(gates[pos:end])
+            pos = end
+            v = sim.get_int(reg)
+            ok &= bool(np.all((v >= 0) & (v < 2 ** (self.G - 1 + self.Fi))))
+        sim.run(gates[pos:self.gate_range[1]])
+        return ok
 
     def amplitudes(self, th, B):
         """Prepared vector: product of cos/sin of the node angles along each path."""
@@ -115,27 +161,55 @@ class Tree:
         return _toffoli(self.c.gates[slice(*self.gate_range)])
 
     def formulas(self):
-        """Closed forms of Sec. 5 for the arithmetic stage."""
+        """Closed forms of Sec. 5 for the arithmetic stage: vectoring nodes cost
+        4 I (W - 1) each, known nodes 2 (W - 1)(s - 1) for s signed digits."""
         I, W, m = self.I, self.W, self.m
-        return dict(toffoli=4 * I * (W - 1) * (m - 1),
-                    work=m * W + m // 2 + 2 * W
-                    + (m - 1) * (I + I * W - I * (I - 1) // 2))
+        n_vec = len(self.dbits)
+        n_copy = m - sum(1 for (q, p) in self.known if q == self.L - 1)
+        s = [len(d) for d in self.digits.values()]
+        return dict(toffoli=4 * I * (W - 1) * n_vec + 2 * (W - 1) * sum(k - 1 for k in s),
+                    work=n_copy * W + len(self.flags) + 2 * W + W * len(s)
+                    + n_vec * (I + I * W - I * (I - 1) // 2))
 
     def rotation_counts(self):
         """Rotation stage (counted, not simulated at gate level).
 
-        Level 0 uses the root decision bits as controls. Level q >= 1 selects
-        D_i = XOR_p [t_0..t_{q-1} = p] d_i^(q, p) by unary iteration over the
-        2^q prefixes (2^q - 1 temporary ANDs) with one Toffoli per (p, i); D_i
-        is uncomputed by measurement, whose phase correction (-1)^D_i repeats
-        the unary iteration with CZ gates (another 2^q - 1 ANDs). The leaf
-        sign flags are selected the same way and take a Z. Each level applies
-        one fixed rotation R(A) and I rotations R(-2 alpha_i) controlled by D_i.
+        Level q has vectoring nodes V_q and known nodes C_q. The decision bits
+        are selected over V_q only: D_i = XOR_{p in V_q} [t_0..t_{q-1} = p]
+        d_i^(q, p), by unary iteration over the 2^q prefixes (2^q - 1
+        temporary ANDs, repeated for the measurement-based uncompute) and one
+        Toffoli per (p, i); at level 0 the root bits are used directly. The
+        leaf sign flags are selected the same way and take a Z gate. Each level
+        applies R(A) to t_q if V_q is not empty and I rotations R(-2 alpha_i)
+        controlled by D_i; each known node adds the fixed rotation R(theta_c)
+        (or R(theta_c - A) when V_q is not empty), controlled by its prefix.
         """
         I, L = self.I, self.L
-        tof = sum(2 * (2 ** q - 1) + (I + (q == L - 1)) * 2 ** q
-                  for q in range(1, L))
-        return dict(toffoli=tof, controlled_ry=L * I, fixed_ry=L)
+        tof = ctrl = fixed = 0
+        for q in range(L):
+            V = [p for p in range(2 ** q) if (q, p) in self.dbits]
+            C = [p for p in range(2 ** q) if (q, p) in self.known]
+            nflag = len(self.flags) if q == L - 1 else 0
+            if q >= 1 and (V or nflag):
+                tof += 2 * (2 ** q - 1) + I * len(V) + nflag
+            ctrl += I if V else 0
+            fixed += (1 if V else 0) + len(C)
+        return dict(toffoli=tof, controlled_ry=ctrl, fixed_ry=fixed,
+                    flag_z=len(self.flags))
+
+
+def _const_product(c, src, M, F):
+    """Fresh register <- M * src by shifts and additions over the canonical
+    signed digits of M: the leading digit is a copy, the others additions.
+    Returns the register and the digits."""
+    digits = csd(M, F)
+    out = c.alloc(len(src))
+    j0, d0 = digits[-1]
+    assert d0 > 0
+    copy_view(c, shift(src, j0), out)
+    for j, d in digits[:-1]:
+        add_view(c, out, shift(src, j), neg=None if d > 0 else True)
+    return out, digits
 
 
 # ==========================================================================
@@ -153,12 +227,12 @@ def _dirty_bits(sim, n, protected):
 class TreeCircuit:
     """R alone, on caller registers loaded with given values (rounded to F bits)."""
 
-    def __init__(self, L, F, g=None, G=None, w_in=None):
+    def __init__(self, L, F, g=None, G=None, w_in=None, known=None, signed=()):
         c = Circuit()
         self.F = F
         self.w_in = F + 2 if w_in is None else w_in       # |v_i| < 2
         self.v = [c.alloc(self.w_in) for _ in range(2 ** L)]
-        self.tree = Tree(c, self.v, F, g, G)
+        self.tree = Tree(c, self.v, F, g, G, known, signed)
         self.n_arith = len(c.gates)
         c.gates += reverse(c.gates)
         self.c = c
@@ -171,13 +245,15 @@ class TreeCircuit:
         sim = BitSim(self.c.n, B)
         for l, r in enumerate(self.v):
             sim.set_int(r, Z[:, l] & ((1 << self.w_in) - 1))
-        sim.run(self.c.gates[:self.n_arith])
+        sim.run(self.c.gates[:self.tree.gate_range[0]])
+        ok = self.tree.run_checked(sim, self.c.gates, self.tree.gate_range[0])
         th = self.tree.angles(sim)
         amp = self.tree.amplitudes(th, B)
         sim.run(self.c.gates[self.n_arith:])
         dirty = _dirty_bits(sim, self.c.n, {w for r in self.v for w in r})
         restored = all(np.all(sim.get_int(r) == Z[:, l]) for l, r in enumerate(self.v))
-        return amp, dict(work_bits_left_set=dirty, inputs_restored=restored)
+        return amp, dict(work_bits_left_set=dirty, inputs_restored=restored,
+                         no_overflow=ok)
 
 
 class SymbolCircuit:
