@@ -1,0 +1,7 @@
+__pycache__/
+*.egg-info/
+paper/*.aux
+paper/*.log
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.out

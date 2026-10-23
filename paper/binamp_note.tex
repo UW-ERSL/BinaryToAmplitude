@@ -1,0 +1,347 @@
+% =============================================================================
+% Binary-to-amplitude conversion of a vector by a tree of CORDIC vectorings
+% K. Suresh, UW-Madison. Short note for arXiv (2 pages + references).
+%
+% BUILD:        latexmk -pdf binamp_note.tex
+% CONVENTIONS:  m = 2^L leaves; F fractional bits of the input registers;
+%               g = ceil(log2 F) guard bits; F' = F + g internal fractional
+%               bits; I = F' CORDIC iterations; W = F' + G register width;
+%               rho_nu = norm of v on the leaves of node nu; R(t) = R_y(2t).
+%               Numerals in math mode; \emph at first definition only;
+%               \textbf only for headline numerals; no em dashes.
+% SCOPE:        THE NOTE DOES NOT COVER COMPLEX PHASES (APPLIED SEPARATELY),
+%               THE CIRCUIT A THAT COMPUTES v (THE CALLER'S), THE CASE v = 0
+%               (THE CALLER SUPPLIES A FLAG), PEBBLING OF THE WORK REGISTER,
+%               OR A GATE-LEVEL SIMULATION OF THE ROTATION STAGE.
+% STRUCTURE:    Sec. 1 setting, gap, contribution, roadmap.
+%               Sec. 2 problem statement and requirements.
+%               Sec. 3 one pair, the tree, the rotation stage, guard bits.
+%               Sec. 4 error: Prop. 1 (tree), Lemma 2 (one vectoring),
+%                      Prop. 3 (propagation), Corollary 4.
+%               Sec. 5 cost (Table 1).
+%               Sec. 6 examples: Laplacian gradient symbol, stencil rows.
+%               Sec. 7 conclusions.
+% NUMBERS:      binamp.py (ex1.py, ex23.py, lemma_check.py), 2026-10-23.
+% =============================================================================
+\documentclass[9pt,twocolumn]{extarticle}
+\usepackage[margin=0.55in,top=0.45in,bottom=0.5in,columnsep=0.22in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,bm,booktabs,url}
+\usepackage[T1]{fontenc}
+\newcommand{\norm}[1]{\lVert #1\rVert}
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}[proposition]{Lemma}
+\newtheorem{corollary}[proposition]{Corollary}
+\setlength{\parskip}{0pt}
+\title{\vspace{-1.6em}Binary-to-amplitude conversion of a vector\\ by a tree of CORDIC vectorings\vspace{-0.6em}}
+\author{Krishnan Suresh\\ \small Department of Mechanical Engineering, University of Wisconsin--Madison}
+\date{\vspace{-1.2em}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Given an index register $|j\rangle$ and fixed-point registers holding an
+unnormalized real vector $\bm v(j)$ with $m$ entries, we give a reversible
+circuit that prepares $\bm v(j)/\norm{\bm v(j)}_2$ on $\lceil\log_2 m\rceil$
+qubits for all $j$ at once, with no division, square root, or angle register.
+It uses $m - 1$ CORDIC vectorings arranged in a binary tree, costs $O(mF^2)$
+Toffoli gates for $F$ fractional bits independent of the size of the index
+register, and has a proven error bound $O(m\,2^{-F}(1 + 1/\norm{\bm v}_2))$.
+\end{abstract}
+
+\section{Introduction}\label{sec:intro}
+
+Many structured quantum algorithms need a family of small states indexed by a
+large register, $\sum_j \alpha_j |j\rangle \otimes \bm v(j)/\norm{\bm v(j)}_2$,
+in which $\bm v(j)$ has a few entries given by a formula in $j$. Such families
+arise as the row states of block encodings built from state preparation
+\cite{gilyen2019quantum,kerenidis2017recommendation}, where row $j$ of a sparse
+matrix with computable entries plays the role of $\bm v(j)$; as the
+per-frequency vectors of operators that the Fourier transform diagonalizes
+\cite{tong2021fast}; and as amplitude pairs set by a computed eigenvalue.
+Standard state preparation \cite{mottonen2005transformation,shende2006synthesis}
+builds one vector known at compile time; indexed by $j$, it becomes a
+multiplexor with $2^n$ rotations per angle for an $n$-qubit index.
+Binary-to-amplitude conversion \cite{burge2024quantum} handles one amplitude per
+index and requires a normalized input, that is, a coherent square root and
+division. Black-box state preparation \cite{grover2000synthesis,sanders2019black}
+is probabilistic and requires amplitude amplification.
+
+The normalization can instead be carried by the arithmetic itself. A CORDIC
+vectoring \cite{volder1959cordic} of a pair $(x, y)$ returns the angle
+$\operatorname{atan2}(y, x)$ as a sequence of decision bits and the length
+$(x^2 + y^2)^{1/2}$ times a known constant; the decision bits can drive the
+rotations directly \cite{burge2024quantum}, and the length is the input of the
+next vectoring.
+
+We give a deterministic circuit that prepares the normalized $m$-entry vector
+from unnormalized fixed-point registers by a binary tree of $m - 1$ vectorings,
+at a cost of $4I(W - 1)(m - 1)$ Toffoli gates for the arithmetic, computed and
+uncomputed, and $I\log_2 m$ controlled rotations, where $I = F + \lceil\log_2
+F\rceil$ and $W = I + O(\log m)$; for $m = 4$ and $F = 32$ this is
+$\bm{18{,}282}$ Toffoli gates in all and $\bm{74}$ controlled rotations. We
+prove $\norm{\tilde{\bm v} - \bm v/\norm{\bm v}_2}_2 \le m\,2^{-F}(54/\norm{\bm
+v}_2 + 2.3)$; the measured value of $\norm{\bm v}_2\,2^F\norm{\tilde{\bm v} -
+\bm v/\norm{\bm v}_2}_2$ is at most $\bm{1.14}$ for $m \le 16$.
+
+Sections~\ref{sec:problem} to \ref{sec:concl} give the problem, circuit,
+error, cost, examples, and conclusions.
+
+\section{Problem}\label{sec:problem}
+
+Let $j \in \{0, \dots, 2^n - 1\}$ index the basis states of an $n$-qubit
+register, and let a reversible circuit $\mathcal A$ compute real fixed-point
+values, $\mathcal A|j\rangle|0\rangle = |j\rangle|\bm v(j)\rangle$, with
+$\bm v(j) = (v_0(j), \dots, v_{m-1}(j)) \ne \bm 0$ held in $m$ two's-complement
+registers with $F$ fractional bits and $|v_\ell| \le 1$. We seek a circuit
+$\mathcal R$ such that, for every register value $\bm v \ne \bm 0$,
+\begin{equation}
+\mathcal R\,|\bm v\rangle|0\rangle_t|0\rangle_w
+= |\bm v\rangle \otimes \sum_{\ell=0}^{m-1} \tilde v_\ell\,|\ell\rangle \otimes |0\rangle_w ,
+\qquad \tilde{\bm v} \approx \bm v / \norm{\bm v}_2 ,
+\label{eq:problem}
+\end{equation}
+so that $\mathcal A^{\dagger}\mathcal R\,\mathcal A
+= \sum_j |j\rangle\langle j| \otimes \mathcal Q(j)$ with
+$\mathcal Q(j)|0\rangle = \tilde{\bm v}(j)$ for all $j$ at once. The circuit
+$\mathcal R$ must use no division, square root, or angle register; its cost must
+depend on $m$ and $F$ but not on $2^n$; its work register $w$ must return to
+$|0\rangle$; and its error must be bounded in terms of $F$ and the norms of the
+partial vectors that it normalizes.
+
+\section{Method}\label{sec:method}
+
+\paragraph{One pair.} With $\alpha_i = \arctan 2^{-i}$, iteration $i$ of
+vectoring maps $(x, y)$ to $(x + s_i 2^{-i} y,\ y - s_i 2^{-i} x)$ with
+$s_i = 1 - 2d_i$ and decision bit $d_i = [y < 0]$; the shifts are arithmetic
+(floor) shifts, so each iteration is two additions. For $x_0 \ge 0$, after $I$
+iterations the decision bits encode
+\begin{equation}
+\theta_d = \sum_{i<I} (1 - 2d_i)\,\alpha_i = A - 2\sum_{i<I} d_i\,\alpha_i ,
+\qquad A = \sum_{i<I}\alpha_i ,
+\label{eq:theta}
+\end{equation}
+which approximates $\operatorname{atan2}(y_0, x_0)$, and $x_I$ approximates
+$K\rho$ with $\rho = (x_0^2 + y_0^2)^{1/2}$ and
+$K = \prod_{i<I}(1 + 4^{-i})^{1/2}$. By Equation~\eqref{eq:theta}, the
+rotation $R(\theta_d) = R_y(2\theta_d)$ is the fixed rotation $R(A)$ followed by
+$R(-2\alpha_i)$ controlled by $d_i$; no register holds the angle. Reversibility
+requires keeping, in each iteration, the shifted copy of $x$ and the bit $d_i$
+until the uncomputation \cite{bennett1973logical}.
+
+\paragraph{The tree.} Let $m = 2^L$ (pad with zero registers otherwise). Node
+$\nu = (q, p)$ at level $q < L$ covers the leaves $p2^{L-q}$ to
+$(p+1)2^{L-q} - 1$; its partial norm $\rho_\nu$ is the norm of $\bm v$ on these
+leaves, and its exact direction is
+$\bm u_\nu = (\rho_{\mathrm{left}}, \rho_{\mathrm{right}})/\rho_\nu$, with
+$\bm u_\nu = (v_{2p}, v_{2p+1})/\rho_\nu$ at the leaf level $q = L - 1$. A leaf
+pair with $v_{2p} < 0$ is negated under a flag $f_p$ (bitwise complement, CNOT
+gates only), which adds $\pi$ to its angle. The vectorings run from the leaves
+to the root, each in place on the $x$ registers of its two children; both
+children of a node at height $h$ carry the gain $K^h$, so no constant product is
+needed. The uncomputation is the exact reverse.
+
+\paragraph{The rotation stage.} The target qubits $t_0, \dots, t_{L-1}$ are
+rotated level by level from the root. Level $0$ uses the root decision bits as
+controls. At level $q \ge 1$ the bits
+$D_i = \bigoplus_p [t_0 \cdots t_{q-1} = p]\, d_i^{(q,p)}$ are selected by
+unary iteration over the $2^q$ prefixes \cite{babbush2018encoding} with one
+Toffoli gate per pair $(p, i)$, and uncomputed by measurement, whose phase
+correction $(-1)^{D_i}$ repeats the unary iteration with CZ gates; then $R(A)$ and
+$I$ rotations $R(-2\alpha_i)$ controlled by $D_i$ act on $t_q$. The selected
+leaf flag takes a $Z$ gate, since $R(\theta + \pi) = -R(\theta)$. The stage
+uses $IL$ controlled rotations, not $I(m - 1)$.
+
+\paragraph{Guard bits.} The registers are copied, shifted by $g = \lceil\log_2
+F\rceil$ bits, into working registers with $F' = F + g$ fractional bits and
+$W = F' + G$ bits, $G = \lceil \log_2 (K^L\sqrt m)\rceil + 2$, and $I = F'$.
+This is the guard-digit rule of fixed-point CORDIC \cite{hu1992quantization};
+Lemma~\ref{lem:pair} shows why it is needed.
+
+\section{Error}\label{sec:error}
+
+Let $\tilde{\bm u}_\nu = (\cos\tilde\theta_\nu, \sin\tilde\theta_\nu)$ be the
+prepared direction of node $\nu$ and
+$\varepsilon_\nu = \rho_\nu\norm{\tilde{\bm u}_\nu - \bm u_\nu}_2$ its
+\emph{tangential error}.
+
+\begin{proposition}[Tree]\label{prop:tree}
+For every $\bm v \ne \bm 0$ and every choice of computed angles,
+$\norm{\tilde{\bm v} - \bm v/\norm{\bm v}_2}_2 \le
+\norm{\bm v}_2^{-1}\sum_\nu \varepsilon_\nu$, the sum over the $m - 1$ nodes.
+\end{proposition}
+
+\begin{proof}
+Replace the exact angles by the computed ones one node at a time, from the
+leaves to the root. When node $\nu$ is replaced its ancestors are exact, so the
+amplitude on the prefix that selects $\nu$ is $\rho_\nu/\norm{\bm v}_2$; the
+replacement changes that component by a vector of norm
+$\varepsilon_\nu/\norm{\bm v}_2$, and the rotations below $\nu$ act unitarily
+on its subtree. The $m - 1$ differences add; nodes with $\rho_\nu = 0$,
+including zero padding, contribute nothing.
+\end{proof}
+
+\begin{lemma}[One vectoring]\label{lem:pair}
+Let $(x_0, y_0)$ be register values with unit $u = 2^{-F'}$, $x_0 \ge 0$,
+$\rho > 0$, and $I \ge 4$. Then
+$\rho\,\norm{(\cos\theta_d, \sin\theta_d) - (x_0, y_0)/\rho}_2
+\le 2\sqrt2\,2^{-I}\rho + 2.95(I - 1)u$ and
+$|x_I/K - \rho| \le 2\cdot 2^{-I}\rho + 2.52(I - 1)u$.
+\end{lemma}
+
+\begin{proof}
+Each iteration adds to $x$ the value $s_i\lfloor 2^{-i}y\rfloor \ge 0$, so
+$x_I \ge x_1 = x_0 + |y_0| \ge \rho$. Write
+$\bm p_{i+1} = k_i R(-s_i\alpha_i)\bm p_i + \bm r_i$ with
+$k_i = (1 + 4^{-i})^{1/2}$ and truncation error $\norm{\bm r_i} < \sqrt2\,u$,
+$\bm r_0 = \bm 0$; unrolling, $\bm p_I = \bm q + \bm e$ with
+$\bm q = K R(-\theta_d)\bm p_0$ and
+$\norm{\bm e} \le D = \sqrt2\,\kappa(I - 1)u$,
+$\kappa = \prod_{j\ge2} k_j = 1.0415$. For $i \ge 1$, induction on
+$|y_i| \le 2^{1-i}x_i + (i - 1)u$, started by $|y_1| = ||y_0| - x_0| \le x_1$
+and continued with $|y_{i+1}| \le ||y_i| - 2^{-i}x_i| + u$ and
+$x_i \le x_{i+1}$, gives $|y_I| \le 2^{1-I}x_I + (I - 1)u$, with
+$x_I \le K\rho + D$. Write $\bm q = K\rho(\cos\delta, \sin\delta)$,
+$\delta = \operatorname{atan2}(y_0, x_0) - \theta_d$. If $\rho > D$, then
+$q_x \ge x_I - D > 0$, so $|\delta| < \pi/2$, and
+$K\rho|\sin\delta| = |y_I - e_y| \le 2^{1-I}(K\rho + D) + (I - 1)u + D$; the
+first claim follows from $2|\sin(\delta/2)| \le \sqrt2|\sin\delta|$ and the
+second from $|x_I - K\rho| \le D + K\rho(1 - \cos\delta) \le D + K\rho|\sin
+\delta|$, with $K \ge 1.642$. If $\rho \le D$, the left sides are at most
+$2\rho \le 2D$ and, since $\rho \le x_I \le K\rho + D$, at most $D/K$.
+\end{proof}
+
+Without guard bits the second terms are $O(F\,2^{-F})$; floor truncation is
+biased, and the measured length error grows as $0.6F\,2^{-F}$.
+
+\begin{proposition}[Propagation]\label{prop:prop}
+Let $a$ and $b$ bound the two right sides of Lemma~\ref{lem:pair} over the
+nodes, divided by the gain $K^h$, and let $\eta = \sqrt2\,u$ bound the error of
+the leaf negation. Then
+\begin{equation}
+\norm{\tilde{\bm v} - \bm v/\norm{\bm v}_2}_2
+\le \frac{(m - 1)a + 16.5\,m b + 6.9\,m\eta}{\norm{\bm v}_2} .
+\label{eq:prop}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Let $\tilde{\bm p}_\nu$ be the computed input pair of node $\nu$, unscaled. The
+inequality $\norm{\bm p/\norm{\bm p} - \tilde{\bm p}/\norm{\tilde{\bm p}}}
+\le 2\norm{\bm p - \tilde{\bm p}}/\max(\norm{\bm p}, \norm{\tilde{\bm p}})$ and
+Lemma~\ref{lem:pair} applied to $\tilde{\bm p}_\nu$ give
+$\varepsilon_\nu \le 4\norm{\tilde{\bm p}_\nu - \bm p_\nu} + a$. The length
+error $E_h$ of the outputs at height $h$ obeys $E_0 \le \eta + b$ and
+$E_h \le \sqrt2 E_{h-1} + b$, since the norm is $1$-Lipschitz, so
+$E_h \le 2^{h/2}(\eta + 3.42b)$. With $\varepsilon_0 \le 4\eta + a$,
+$\varepsilon_h \le 4\sqrt2E_{h-1} + a$, $m/2^{h+1}$ nodes at height $h$, and
+$\sum_{h\ge1}2^{-h/2} = 1/(\sqrt2 - 1)$, Proposition~\ref{prop:tree} gives
+Equation~\eqref{eq:prop}.
+\end{proof}
+
+\begin{corollary}\label{cor:bound}
+With $g = \lceil\log_2F\rceil$, $F \ge 16$, and $m \le 2^{F/2}$,
+$\norm{\tilde{\bm v} - \bm v/\norm{\bm v}_2}_2 \le m\,2^{-F}(54/\norm{\bm
+v}_2 + 2.3)$ for every $\bm v \ne \bm 0$.
+\end{corollary}
+
+The corollary follows from $u \le 2^{-F}/F$ and from $\Lambda \le \norm{\bm
+v}_2 + E_{L-1}$, where $\Lambda$, the largest computed partial norm, bounds
+$\rho$ in $a$ and $b$; for $m \le 2^{F/2}$, $E_{L-1} \le 0.007$. It is a worst
+case: the measured value of $\norm{\bm v}_2 2^F\norm{\tilde{\bm v} - \bm
+v/\norm{\bm v}_2}_2$ is at most $1.14$ for $m \le 16$ (Table~\ref{tab:cost}).
+
+\section{Cost}\label{sec:cost}
+
+With the adders of Gidney \cite{gidney2018halving}, which cost $W - 1$ Toffoli gates
+per $W$-bit addition, the arithmetic costs $4I(W - 1)(m - 1)$ Toffoli gates,
+computed and uncomputed; the rotation stage costs
+$\sum_{q=1}^{L-1}[2(2^q - 1) + (I + [q = L - 1])2^q]$ Toffoli gates, the
+factor $2$ for the second unary iteration, $IL$
+controlled and $L$ fixed rotations; and the work register holds
+$mW + m/2 + 2W + (m - 1)(I + IW - I(I - 1)/2)$ qubits, mostly the shifted
+copies. The code asserts these counts against the gate lists, and
+Table~\ref{tab:cost} gives them at $F = 32$; the Toffoli count grows as
+$m(W - 1)$, linearly in $m$ apart from the $O(\log m)$ range bits $G$.
+
+\begin{table}[t]
+\centering\small
+\caption{Cost and measured error at $F = 32$, $g = 5$: Toffoli columns are
+compute plus uncompute; the error column is the maximum of
+$\norm{\bm v}_2 2^F\norm{\tilde{\bm v} - \bm v/\norm{\bm v}_2}_2$ over
+$4{,}096$ inputs $u\,2^{-e}$, $u \sim U(-1, 1)$, $e \sim U(0, F/2)$, seed
+$4$, not a bound.}
+\label{tab:cost}
+\begin{tabular}{rrrrrrr}
+\toprule
+$m$ & $G$ & arith. & rot. & ctrl.\ $R_y$ & qubits & error \\
+\midrule
+$2$  & $4$ & $5{,}920$  & $0$   & $37$  & $1{,}053$  & $0.23$ \\
+$4$  & $5$ & $18{,}204$ & $78$  & $74$  & $3{,}029$  & $0.53$ \\
+$8$  & $6$ & $43{,}512$ & $234$ & $111$ & $7{,}168$  & $0.83$ \\
+$16$ & $7$ & $95{,}460$ & $548$ & $148$ & $15{,}785$ & $1.14$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Examples}\label{sec:examples}
+
+\paragraph{Gradient symbol of the finite-difference Laplacian.} The five-point
+(seven-point in 3D) Laplacian on an $N^d$ periodic grid is $D^{\mathsf T}D$ with
+$D$ the forward-difference gradient, whose symbol has components
+$e^{i\theta_j} - 1 = 2ie^{i\theta_j/2}\sin(\theta_j/2)$,
+$\theta_j = 2\pi k_j/N$. Up to phases, the vector is
+\begin{equation}
+\bm v(\bm k) = \bigl(\sin(\pi k_1/N), \dots, \sin(\pi k_d/N)\bigr),
+\qquad \norm{\bm v}_2^2 = \lambda(\bm k)/4 ,
+\end{equation}
+with $\lambda$ the Laplacian symbol, so the prepared family is normalized by
+$\lambda^{1/2}$, in the setting of fast inversion \cite{tong2021fast}. Here
+$\mathcal A$ is CORDIC rotation mode on $\pi k_j/N$ ($F$ bits, $F$
+iterations), with the range reduced to $[-\pi/2, \pi/2)$ by a flag that, for
+$k_j/N \ge 1/2$, subtracts $\pi$ and starts from $(-1/K, 0)$. It is simulated with $\mathcal R$ bit by
+bit over every $\bm k$, and the work register returns to zero. Since
+$\norm{\bm v}_2 \ge \sin(\pi/N)$ for $\bm k \ne \bm 0$, the error grows as
+$N2^{-F}$. Over $N = 16$ to $1024$ ($d = 2$, $m = 2$) and $N = 16$ to $64$
+($d = 3$, padded to $m = 4$), $F = 16, 24, 32$, the end-to-end error against
+the exact $\bm v/\norm{\bm v}_2$ is at most $1.91\,N2^{-F}$; it is dominated by
+the absolute error of $\mathcal A$, at most $16.2\cdot2^{-F}$; $\mathcal R$ alone
+contributes at most $0.66\cdot2^{-F}/\norm{\bm v}_2$.
+
+\paragraph{Row states of a variable-coefficient stencil.} For the row states
+of a block encoding \cite{gilyen2019quantum,kerenidis2017recommendation}, row
+$j$ of the one-dimensional diffusion matrix with coefficient
+$c(x) = 1 + \tfrac12\sin 2\pi x$ gives
+$\bm v = (-c_{j-1/2},\ c_{j-1/2} + c_{j+1/2},\ -c_{j+1/2},\ 0)/4$,
+with signed entries, one zero leaf, and $\norm{\bm v}_2 \ge 0.306$. The inputs are
+rounded to $F$ bits classically; $\mathcal A$ is not simulated.
+For $N = 1024$ rows and $F = 16, 24, 32$, the error is at most
+$1.5\times10^{-5}$, $3.7\times10^{-8}$, and $1.8\times10^{-10}$.
+
+\section{Conclusions}\label{sec:concl}
+
+The cost depends on $m$ and $F$ only, so the circuit suits a large index
+register and a small vector; for large $m$, its $O(mF^2)$ Toffoli gates and
+work qubits favor other methods. The proven error,
+$O(m2^{-F}(1 + 1/\norm{\bm v}_2))$, is at least $750$ times the measured one
+at $m = 16$; the factor $1/\norm{\bm v}_2$ belongs to the problem, and
+short vectors need $\log_2(1/\norm{\bm v}_2)$ more bits. Code:
+\url{https://github.com/UW-ERSL/BinaryToAmplitude}.
+
+\footnotesize
+\begin{thebibliography}{99}\setlength{\itemsep}{0pt}
+\bibitem{gilyen2019quantum} A. Gily\'en et al., Proc.\ STOC (2019) 193--204.
+\bibitem{kerenidis2017recommendation} I. Kerenidis, A. Prakash, Proc.\ ITCS, LIPIcs 67 (2017) 49.
+\bibitem{tong2021fast} Y. Tong et al., Phys.\ Rev.\ A 104 (2021) 032422.
+\bibitem{mottonen2005transformation} M. M\"ott\"onen et al., Quantum Inf.\ Comput.\ 5 (2005) 467--473.
+\bibitem{shende2006synthesis} V. V. Shende, S. S. Bullock, I. L. Markov, IEEE Trans.\ Comput.-Aided Des.\ 25 (2006) 1000--1010.
+\bibitem{burge2024quantum} I. Burge, M. Barbeau, J. Garcia-Alfaro, arXiv:2411.14434 (2024).
+\bibitem{grover2000synthesis} L. K. Grover, Phys.\ Rev.\ Lett.\ 85 (2000) 1334.
+\bibitem{sanders2019black} Y. R. Sanders et al., Phys.\ Rev.\ Lett.\ 122 (2019) 020502.
+\bibitem{volder1959cordic} J. E. Volder, IRE Trans.\ Electron.\ Comput.\ EC-8 (1959) 330--334.
+\bibitem{bennett1973logical} C. H. Bennett, IBM J. Res.\ Dev.\ 17 (1973) 525--532.
+\bibitem{babbush2018encoding} R. Babbush et al., Phys.\ Rev.\ X 8 (2018) 041015.
+\bibitem{hu1992quantization} Y. H. Hu, IEEE Trans.\ Signal Process.\ 40 (1992) 834--844.
+\bibitem{gidney2018halving} C. Gidney, Quantum 2 (2018) 74.
+\end{thebibliography}
+\end{document}
