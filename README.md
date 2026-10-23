@@ -44,8 +44,6 @@ print(checks, f"{err:.2e}", tc.tree.toffoli())
 | `scripts/example_laplacian_symbol.py` | Sec. 6, Example 1 (gradient symbol of the finite-difference Laplacian, d = 2 and 3) | about 1 minute |
 | `scripts/example_stencil_rows.py` | Sec. 6, Example 2 (row states of a variable-coefficient stencil) | seconds |
 
-The LaTeX source of the note is in `paper/`.
-
 ## Package
 
 - `binary_to_amplitude/tree.py`: the circuit R (`Tree`), a driver on given
