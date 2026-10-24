@@ -107,7 +107,7 @@ print(tc.tree.toffoli(), tc.tree.rotation_counts())   # 18624, 91 ctrl Ry, 2 fix
 - `multiplexed_state_preparation/revcirc.py`: reversible fixed-point arithmetic (Gidney
   adders, CORDIC rotation and vectoring modes) and a bit-packed simulator that
   runs all inputs at once, from
-  [QuantumHomogenizationPoisson](https://github.com/UW-ERSL/QuantumHomogenizationPoisson).
+  [QuantumInversionPoisson](https://github.com/UW-ERSL/QuantumInversionPoisson).
 
 ## Scope
 

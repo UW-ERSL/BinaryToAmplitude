@@ -1,6 +1,6 @@
 """revcirc -- gate-level reversible fixed-point arithmetic, with a bit-exact simulator.
 
-Taken unchanged in function from github.com/UW-ERSL/QuantumHomogenizationPoisson
+Taken unchanged in function from github.com/UW-ERSL/QuantumInversionPoisson
 (quantuminversionpoisson/revcirc.py, commit e8642e2).
 
 Gates are X, CX and CCX, plus the temporary AND of Gidney and its
