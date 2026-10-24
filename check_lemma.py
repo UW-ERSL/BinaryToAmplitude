@@ -1,4 +1,4 @@
-"""Lemma 2: check every inequality of the proof on integer vectoring with
+"""Lemma 3 of the companion paper: check every inequality of the proof on integer vectoring with
 floor-truncated shifts (I fractional bits, I iterations, u = 2^-I), on
 200,000 random pairs per I with magnitudes down to 2^-I, seed 5."""
 import numpy as np
@@ -21,7 +21,7 @@ for I in (8, 16, 24, 32, 40):
         x, y = xn, yn
         th += s * np.arctan(2.0 ** -i)
 
-    # the two claims of Lemma 2
+    # the two claims of Lemma 3
     K = np.prod(np.sqrt(1 + 4.0 ** -np.arange(I)))
     X0, Y0, X, Y = x0 * u, y0 * u, x * u, y * u
     rho = np.hypot(X0, Y0)

@@ -57,6 +57,9 @@ class Tree:
              its output is (K / cos theta_c) x_left, by shifts and additions
              over the signed digits of the constant, and its rotation is the
              fixed R(theta_c). At the leaf level the right register is not read.
+             A value may also be a pair (theta_c, scale) for a leaf node whose
+             left register holds the entry divided by scale; the constant
+             product then uses K scale / cos theta_c.
       signed nodes in `known` at the leaf level whose left entry may be
              negative; they get the sign flag of a leaf pair.
     """
@@ -71,7 +74,11 @@ class Tree:
         self.I = self.Fi
         self.G = range_bits(L) if G is None else G
         self.W = W = self.Fi + self.G
-        self.known = dict(known or {})
+        self.known, self.scale = {}, {}
+        for node, val in dict(known or {}).items():
+            th, sc = (val if isinstance(val, tuple) else (val, 1.0))
+            assert sc == 1.0 or node[0] == L - 1, "a scale applies to leaf nodes only"
+            self.known[node], self.scale[node] = float(th), float(sc)
         for (q, p), th in self.known.items():
             assert np.cos(th) >= 1 / np.sqrt(2) - 1e-12, "order children so cos >= 1/sqrt 2"
             assert q == L - 1 or th >= 0, "partial norms are nonnegative: theta_c in [0, pi/4]"
@@ -81,14 +88,19 @@ class Tree:
 
         # working copies, shifted by g (CNOT only); a known leaf node reads its left entry only
         skip = {2 * p + 1 for (q, p) in self.known if q == L - 1}
-        xs = []
+        xs, self.n_copies, used = [], 0, set()
         for l, r in enumerate(regs):
             if l in skip:
                 xs.append(None)
                 continue
+            if self.g == 0 and len(r) == W and r[0] not in used:
+                xs.append(r)                     # no shift needed: vector in place,
+                used.add(r[0])                   # restored by the uncomputation
+                continue
             x = c.alloc(W)
             copy_view(c, shl(r + [r[-1]] * (W - len(r)), self.g), x)
             xs.append(x)
+            self.n_copies += 1
 
         self.flags, self.dbits, self.digits, self.marks = {}, {}, {}, []
         cur = xs
@@ -106,7 +118,7 @@ class Tree:
                             c.cx(f, y[j])
                     self.flags[p] = f
                 if (q, p) in self.known:         # known-angle node: constant product
-                    M = K / np.cos(self.known[(q, p)])
+                    M = K * self.scale[(q, p)] / np.cos(self.known[(q, p)])
                     out, self.digits[(q, p)] = _const_product(c, x, M, self.Fi)
                     nxt.append(out)
                 else:                            # vectoring, in place on the children's x registers
@@ -134,14 +146,15 @@ class Tree:
 
     def run_checked(self, sim, gates, start):
         """Run the arithmetic gates[start:] and check, when each node finishes,
-        that its output lies in [0, 2^(G-1)), so no computed value wrapped.
+        that its output lies in (-1, 2^(G-1)), so no computed value wrapped.
         Returns True if no output overflowed."""
         ok, pos = True, start
         for end, _, reg in self.marks:
             sim.run(gates[pos:end])
             pos = end
             v = sim.get_int(reg)
-            ok &= bool(np.all((v >= 0) & (v < 2 ** (self.G - 1 + self.Fi))))
+            # a wrapped value would read below -1; a known node may output -O(ulp)
+            ok &= bool(np.all((v > -2 ** self.Fi) & (v < 2 ** (self.G - 1 + self.Fi))))
         sim.run(gates[pos:self.gate_range[1]])
         return ok
 
@@ -165,7 +178,7 @@ class Tree:
         4 I (W - 1) each, known nodes 2 (W - 1)(s - 1) for s signed digits."""
         I, W, m = self.I, self.W, self.m
         n_vec = len(self.dbits)
-        n_copy = m - sum(1 for (q, p) in self.known if q == self.L - 1)
+        n_copy = self.n_copies
         s = [len(d) for d in self.digits.values()]
         return dict(toffoli=4 * I * (W - 1) * n_vec + 2 * (W - 1) * sum(k - 1 for k in s),
                     work=n_copy * W + len(self.flags) + 2 * W + W * len(s)
@@ -254,60 +267,3 @@ class TreeCircuit:
         restored = all(np.all(sim.get_int(r) == Z[:, l]) for l, r in enumerate(self.v))
         return amp, dict(work_bits_left_set=dirty, inputs_restored=restored,
                          no_overflow=ok)
-
-
-class SymbolCircuit:
-    """A followed by R for v(k) = (sin(pi k_1/N), ..., sin(pi k_d/N)), the
-    gradient symbol of the finite-difference Laplacian up to phases, padded
-    with zero registers to m = 2^ceil(log2 d).
-
-    A is CORDIC rotation mode on pi k_j/N (F fractional bits, F iterations).
-    For k_j/N >= 1/2 a flag subtracts pi from the angle and starts the rotation
-    from (-1/K, 0), so the rotated angle lies in [-pi/2, pi/2).
-    """
-
-    def __init__(self, n, d, F, g=None, guardA=4):
-        c = Circuit()
-        self.n, self.N, self.d, self.F = n, 2 ** n, d, F
-        self.k = [c.alloc(n) for _ in range(d)]
-        Fz, wz, w = F, F + 1, F + guardA
-        K = cordic_gain(F)
-        sins = []
-        for kj in self.k:
-            z = c.alloc(wz)
-            for j in range(n):
-                c.cx(kj[j], z[Fz - n + j])         # z = k_j / N, in units of pi
-            f = c.alloc(1)[0]
-            c.cx(z[-1], f); c.cx(z[-2], f)         # |z| >= 1/2
-            c.cx(f, z[-1])                         # z <- z + 1 (mod 2)
-            x, y = c.alloc(w), c.alloc(w)
-            load_select(c, x, to_int(1 / K, F, w), to_int(-1 / K, F, w), f)
-            cordic_rotate(c, x, y, z, F, F, Fz)
-            sins.append(y)
-        self.toffoli_A = _toffoli(c.gates)
-        m = 2 ** int(np.ceil(np.log2(d)))
-        regs = sins + [c.alloc(w) for _ in range(m - d)]   # zero padding
-        self.sins = sins
-        self.tree = Tree(c, regs, F, g)
-        self.n_arith = len(c.gates)
-        c.gates += reverse(c.gates)
-        self.c = c
-
-    def simulate(self):
-        """Every k != 0. Returns prepared amplitudes, register values of v,
-        exact v, and checks."""
-        N, d = self.N, self.d
-        idx = np.arange(1, N ** d)
-        ks = [(idx // N ** (d - 1 - j)) % N for j in range(d)]
-        B = len(idx)
-        sim = BitSim(self.c.n, B)
-        for kj, val in zip(self.k, ks):
-            sim.set_int(kj, val)
-        sim.run(self.c.gates[:self.n_arith])
-        vreg = np.stack([sim.get_int(y) / 2 ** self.F for y in self.sins], 1)
-        amp = self.tree.amplitudes(self.tree.angles(sim), B)[:, :d]
-        sim.run(self.c.gates[self.n_arith:])
-        dirty = _dirty_bits(sim, self.c.n, {q for r in self.k for q in r})
-        restored = all(np.all(sim.get_int(kj, False) == val) for kj, val in zip(self.k, ks))
-        vex = np.stack([np.sin(np.pi * kk / N) for kk in ks], 1)
-        return amp, vreg, vex, dict(work_bits_left_set=dirty, inputs_restored=restored)

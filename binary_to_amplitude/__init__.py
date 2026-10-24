@@ -1,6 +1,9 @@
-"""Binary-to-amplitude conversion of a vector by a tree of CORDIC vectorings."""
-from .tree import (Tree, TreeCircuit, SymbolCircuit, exact_unit,
-                   default_guard, range_bits)
+"""Binary-to-amplitude conversion of indexed vectors: entries from the index
+bits (Part 1, symbol.py) and normalized amplitudes from the entries (Part 2,
+tree.py)."""
+from .tree import Tree, TreeCircuit, exact_unit, default_guard, range_bits
+from .symbol import SymbolVector
+from .poisson import poisson_isometry
 
-__all__ = ["Tree", "TreeCircuit", "SymbolCircuit", "exact_unit",
+__all__ = ["Tree", "TreeCircuit", "SymbolVector", "poisson_isometry", "exact_unit",
            "default_guard", "range_bits"]
