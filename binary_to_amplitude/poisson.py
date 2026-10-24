@@ -28,8 +28,8 @@ C = np.array([[0, 0, 0.5, 0, 0.5],             # a
 KNOWN = {(1, 1): (np.pi / 4, _R3)}
 
 
-def poisson_isometry(n, F, g=0, G=4):
+def poisson_isometry(n, F, G=4):
     """The circuit for c(k)/||c(k)|| on the wavenumber register (2 x n qubits).
-    Defaults g = 0, G = 4: the configuration of the Poisson paper (registers of
-    F + 4 bits, F iterations)."""
-    return SymbolVector(n, 2, F, ANGLES, C, g=g, G=G, known=KNOWN)
+    Default G = 4: the configuration of the Poisson paper (registers of F + 4
+    bits, F iterations)."""
+    return SymbolVector(n, 2, F, ANGLES, C, G=G, known=KNOWN)

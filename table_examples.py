@@ -1,5 +1,5 @@
 """Table 2: cost of the full circuit (Parts 1 and 2) for the two examples at
-F = 32 (g = 5, F' = 37), compute plus uncompute. The counts do not depend on
+F = 32, compute plus uncompute. The counts do not depend on
 the index size N."""
 import numpy as np
 from binary_to_amplitude import SymbolVector

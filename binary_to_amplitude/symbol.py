@@ -18,8 +18,8 @@ Part 1 (index bits to bit strings) has three stages:
   rows     v_l = C_l0 + sum of C_l,c times the trig registers, by shifts and
            additions over the canonical signed digits of each coefficient; a
            row equal to one trig register with coefficient 1 uses it directly.
-Part 2 (bit strings to amplitudes) is the tree R of tree.py, with g = 0 since
-all registers already carry F' = F + g fractional bits.
+Part 2 (bit strings to amplitudes) is the tree R of tree.py, on the same
+F fractional bits.
 
 The whole arithmetic is built and simulated at gate level and then reversed,
 so the work register returns to zero. The rotation stage of R is counted, not
@@ -31,7 +31,7 @@ import numpy as np
 
 from .revcirc import (Circuit, BitSim, ZERO, copy_view, shift, add_view, csd,
                       load_select, cordic_rotate, cordic_gain, to_int, reverse)
-from .tree import Tree, default_guard, exact_unit, _toffoli, _dirty_bits
+from .tree import Tree, exact_unit, _toffoli, _dirty_bits
 
 
 def _int_digits(p):
@@ -43,21 +43,20 @@ class SymbolVector:
     """Part 1 and Part 2 for v(j) = C t(j).
 
     n, d     index: d registers of n qubits, N = 2^n
-    F        target fractional bits; internal F' = F + g, g = ceil(log2 F) by default
+    F        fractional bits of every register; I = F CORDIC iterations
     angles   list of (p, q): theta = pi (p . j + q) / N, p a tuple of d integers
     C        array (m0, 2R + 1), columns (1, cos theta_1, sin theta_1, ...)
     GA       integer bits, sign included, of the trig and row registers
     G, known, signed   options of the tree (tree.py)
     """
 
-    def __init__(self, n, d, F, angles, C, g=None, G=None, GA=4, known=None, signed=()):
+    def __init__(self, n, d, F, angles, C, G=None, GA=4, known=None, signed=()):
         C = np.asarray(C, float)
         R = len(angles)
         assert C.shape[1] == 2 * R + 1
         c = Circuit()
         self.n, self.N, self.d, self.F, self.angles, self.C = n, 2 ** n, d, F, angles, C
-        self.g = default_guard(F) if g is None else g
-        Fi = F + self.g
+        Fi = F
         self.Fi = self.Fz = self.I = Fi
         wz, w = Fi + 1, Fi + GA
         self.wz, self.w = wz, w
@@ -152,8 +151,8 @@ class SymbolVector:
         self.unread = unread
         regs = self.rows + [c.alloc(w) for _ in range(m - self.m0)]   # zero padding
 
-        # -- Part 2: the tree on F'-bit registers
-        self.tree = Tree(c, regs, Fi, 0, G, known, signed)
+        # -- Part 2: the tree on the same registers
+        self.tree = Tree(c, regs, Fi, G, known, signed)
         seg.append(len(c.gates))
         self.seg = seg
         self.n_arith = len(c.gates)
@@ -255,7 +254,7 @@ class SymbolVector:
         """Corollary (end to end): for each index,
         ||prepared - v/||v|| || <= 2 delta/||v|| + T/(||v|| - delta), with
         delta = ||entry_bounds||_2 and T = m (a + 16.5 b + 6.9 eta) from
-        Proposition 3 and Lemma 2 at I = F', u = 2^-F', Lambda = ||v|| + delta + 0.007."""
+        Propositions 4, 5 and Lemma 3 at I = F, u = 2^-F, Lambda = ||v|| + delta + 0.007."""
         m, I, u = self.tree.m, self.I, 2.0 ** -self.Fi
         delta = np.linalg.norm(self.entry_bounds())
         nv = np.linalg.norm(vex, axis=1)

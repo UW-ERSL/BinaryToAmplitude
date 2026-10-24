@@ -1,7 +1,6 @@
 """Sec. 7, Example 1: gradient symbol of the finite-difference Laplacian,
 v(k) = (sin(pi k_1/N), ..., sin(pi k_d/N)), angles theta_j = pi k_j / N and
-C selecting the sines. Parts 1 and 2 simulated bit by bit over every k != 0;
-default guard bits g = ceil(log2 F)."""
+C selecting the sines. Parts 1 and 2 simulated bit by bit over every k != 0."""
 import numpy as np
 from binary_to_amplitude import SymbolVector, exact_unit
 

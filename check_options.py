@@ -1,6 +1,6 @@
-"""Options of the note: known-angle nodes, and the guard and integer bits g, G.
+"""Options: known-angle nodes, and the integer bits G.
 
-1. The check of the options: g = 0, G = 4, F = 45, m = 4, vectoring nodes for
+1. The check of the options: G = 4, F = 45, m = 4, vectoring nodes for
    the leaf pair (a, b) and the root, and one known-angle node (pi/4) for the
    equal leaves (zeta/sqrt3, zeta/sqrt3).
 2. Accuracy with known nodes on the per-frequency vectors
@@ -21,11 +21,11 @@ def run(tc, V):
 
 # 1. counts
 F = 45
-t = TreeCircuit(2, F, g=0, G=4, known={(1, 1): np.pi / 4}).tree
+t = TreeCircuit(2, F, G=4, known={(1, 1): np.pi / 4}).tree
 r = t.rotation_counts()
 assert t.toffoli() == t.formulas()["toffoli"] == 18624
 assert (r["controlled_ry"], r["fixed_ry"], r["flag_z"]) == (2 * F, 3, 1)
-print(f"F = {F}, g = 0, G = 4, known (1,1) = pi/4: Toffoli {t.toffoli()} "
+print(f"F = {F}, G = 4, known (1,1) = pi/4: Toffoli {t.toffoli()} "
       f"(vectorings 2 x {4 * t.I * (t.W - 1)}, constant product "
       f"{2 * (t.W - 1) * (len(t.digits[(1, 1)]) - 1)}, s = {len(t.digits[(1, 1)])}); "
       f"{r['controlled_ry']} controlled Ry, {r['fixed_ry']} fixed Ry, {r['flag_z']} flag Z")
@@ -35,12 +35,12 @@ for N in (64, 256):
     k1, k2 = [a.ravel()[1:] for a in np.meshgrid(np.arange(N), np.arange(N), indexing="ij")]
     f1, f2 = np.pi * k1 / N, np.pi * k2 / N
     a, b, z = np.sin(f1) * np.cos(f2), np.cos(f1) * np.sin(f2), np.sin(f1) * np.sin(f2)
-    for F, g, G in ((24, 0, 4), (24, None, None), (32, 0, 4)):
-        tc = TreeCircuit(2, F, g=g, G=G, known={(1, 1): np.pi / 4})
+    for F, G in ((24, 4), (24, None), (32, 4)):
+        tc = TreeCircuit(2, F, G=G, known={(1, 1): np.pi / 4})
         V = np.round(np.stack([a, b, z / np.sqrt(3), z / np.sqrt(3)], 1) * 2 ** F) / 2 ** F
         e, nv, ok = run(tc, V)
         assert ok
-        print(f"N = {N:3d}, F = {F}, g = {tc.tree.g}, G = {tc.tree.G}: max err {e.max():.2e}, "
+        print(f"N = {N:3d}, F = {F}, G = {tc.tree.G}: max err {e.max():.2e}, "
               f"err 2^F/N {e.max() * 2 ** F / N:.2f}, Toffoli {tc.tree.toffoli()}")
 
 # 2b. random vectors satisfying the declared relations, seed 7

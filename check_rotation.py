@@ -2,7 +2,7 @@
 ||(x_I, y_I) - (cos theta, sin theta)|| <= 2^(1-I) + I u_z / 2 + K u / 2 + sqrt(2) kappa (I - 1) u, kappa = 1.0415,
 on integer rotation mode with floor-truncated shifts, angle constants rounded to
 the angle grid, and the start value 1/K rounded, as in revcirc.cordic_rotate.
-I = F' fractional bits for x, y and the angle (in units of pi), u = 2^-I,
+I = F fractional bits for x, y and the angle (in units of pi), u = 2^-I,
 u_z = pi 2^-I; 200,000 random angles in [-pi/2, pi/2) per I, seed 6. The check
 also confirms the step of the proof: the residual angle is at most
 alpha_(I-1) + I u_z / 2."""

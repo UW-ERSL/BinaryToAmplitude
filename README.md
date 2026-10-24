@@ -16,11 +16,11 @@ k != 0, the circuit prepares
 
 on two target qubits, controlled by the 2n qubits of k. It has two parts.
 
-1. **Part 1, entries from the wavenumber bits** (`SymbolVector`): the angles
+1. **Part 1, computing the bit strings** (`SymbolVector`): the angles
    phi_1 +- phi_2 are wired from the bits and added, CORDIC rotation mode gives
    their cosines and sines, and sum to product forms a, b, zeta as fixed-point
    numbers.
-2. **Part 2, amplitudes from the entries** (`Tree`): two CORDIC vectorings and
+2. **Part 2, computing the amplitudes** (`Tree`): two CORDIC vectorings and
    one constant product (the hourglass pair has the fixed angle pi/4); the
    decision bits of each vectoring control the rotations directly.
 
@@ -42,7 +42,7 @@ Only numpy is required.
 import numpy as np
 from binary_to_amplitude import poisson_isometry, exact_unit
 
-sv = poisson_isometry(n=6, F=24)                     # N = 64, g = 0 guard bits
+sv = poisson_isometry(n=6, F=24)                     # N = 64, F = 24 fractional bits
 amp, vreg, vex, treg, tex, checks = sv.simulate()    # gate-level arithmetic, every k != 0
 err = np.linalg.norm(amp - exact_unit(vex), axis=1).max()
 print(checks, f"{err:.2e}", sv.toffoli())
@@ -53,6 +53,7 @@ print(checks, f"{err:.2e}", sv.toffoli())
 | script | reproduces | time |
 |---|---|---|
 | `example_poisson_isometry.py` | Theorem 1 and Table 1 (cost by stage at N = 1024, F = 45); Sec. 4, the measured error in the 42 cases and the bound of Corollary 6; the check of the whole block against the Q4 assembly | a few minutes |
+| `example_worked.py` | Secs. 2 and 3, the worked example at k = (3, 1), N = 16, F = 12: the bit strings of a, b, zeta, the decision bits, the angles, and the amplitudes | seconds |
 | `check_rotation.py` | Lemma 2 (rotation mode): the bound and the residual angle on random angles | seconds |
 | `check_lemma.py` | Lemma 3 (one vectoring): every inequality of the proof on random integer vectorings | seconds |
 | `verify_counts.py` | Sec. 5: Toffoli and work-qubit counts of Parts 1 and 2 asserted against the gate lists; work register returns to zero | about 10 seconds |
@@ -69,7 +70,7 @@ paper.
 | `table_examples.py` | whole circuit for the gradient symbol and the stencil rows |
 | `example_laplacian_symbol.py` | gradient symbol of the finite-difference Laplacian, d = 2 and 3 |
 | `example_stencil_rows.py` | row states of a variable-coefficient stencil |
-| `check_options.py` | known-angle nodes and the parameters g, G |
+| `check_options.py` | known-angle nodes and the parameter G |
 
 ## Options
 
@@ -83,19 +84,20 @@ Two options reduce the cost for a specific application; `poisson_isometry` uses 
    digits of the constant, and its rotation is the fixed R(theta_c). At the
    leaf level the right register is not read. `signed=[(q, p), ...]` gives
    such a leaf node the sign flag when its left entry may be negative.
-2. **Guard and integer bits:** `g` (default ceil(log2 F)) and `G` (default
-   ceil(log2(K^L sqrt m)) + 2) are parameters. The simulation reports
+2. **Integer bits:** `G` (default ceil(log2(K^L sqrt m)) + 2) is a
+   parameter. There are no guard bits: F is the only precision parameter, and
+   every register has F fractional bits. The simulation reports
    `no_overflow`, which checks every node output.
 
 ```python
-tc = TreeCircuit(L=2, F=45, g=0, G=4, known={(1, 1): np.pi / 4})
+tc = TreeCircuit(L=2, F=45, G=4, known={(1, 1): np.pi / 4})
 print(tc.tree.toffoli(), tc.tree.rotation_counts())   # 18624, 90 ctrl Ry, 3 fixed, 1 flag Z
 ```
 
 ## Package
 
 - `binary_to_amplitude/poisson.py`: the configuration of the paper
-  (`poisson_isometry`): the matrix C of c(k), g = 0, G = 4, and the known-angle
+  (`poisson_isometry`): the matrix C of c(k), G = 4, and the known-angle
   node (pi/4, 1/sqrt3).
 - `binary_to_amplitude/symbol.py`: Part 1 and the whole circuit for
   v(j) = C t(j) (`SymbolVector`), with the closed-form counts and the bounds of

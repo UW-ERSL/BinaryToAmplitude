@@ -1,9 +1,9 @@
 """The Fourier blocks of the Poisson isometry (Q4 elements, two dimensions).
 
-1. Cost at N = 1024, F = 45, g = 0, G = 4, by stage (Table 1 of the paper).
+1. Cost at N = 1024, F = 45, G = 4, by stage (Table 1 of the paper).
 2. Error of the prepared vector c~(k) against c(k)/||c(k)||, simulated bit by bit
    over every k != 0, for N = 4 ... 256 and F = 12, 16, ..., 32 (42 cases),
-   with the proven bound of Corollary 8 (g = 0) checked at every k.
+   with the proven bound of Corollary 6 checked at every k.
 3. The block itself: e^(i(phi1+phi2)) T c~(k) against Vhat(k) assembled element
    by element from the Q4 gradient, at N = 16, F = 24."""
 import numpy as np
@@ -18,7 +18,7 @@ vec = 4 * tr.I * (tr.W - 1)
 const = 2 * (tr.W - 1) * (len(tr.digits[(1, 1)]) - 1)
 assert t["tree"] == 2 * vec + const
 total = sum(t.values()) + r["toffoli"]
-print(f"N = {2**n}, F = {F}, g = 0, G = 4 (registers of {sv.w} bits)")
+print(f"N = {2**n}, F = {F}, G = 4 (registers of {sv.w} bits)")
 for name, val in (("angles phi1 +- phi2 (adder, subtractor)", t["angles"]),
                   ("cosines and sines (two rotation-mode runs)", t["trig"]),
                   ("a, b, zeta (sum to product)", t["rows"]),

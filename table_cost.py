@@ -1,4 +1,4 @@
-"""Table 1: cost and measured error at F = 32 (g = 5), m = 2 to 16.
+"""Table 1: cost and measured error at F = 32, m = 2 to 16.
 Error column: max of ||v|| 2^F ||v~ - v/||v|| || over 4,096 inputs
 u 2^-e, u ~ U(-1, 1), e ~ U(0, F/2), seed 4."""
 import numpy as np

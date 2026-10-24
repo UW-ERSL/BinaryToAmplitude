@@ -2,10 +2,10 @@
 CORDIC vectorings (the circuit R of the paper).
 
 Given m = 2^L value registers v_0..v_{m-1} (two's complement, F fractional
-bits), the arithmetic stage copies them into working registers with
-F' = F + g fractional bits (g guard bits, default ceil(log2 F)) and
-W = F' + G bits, and runs m - 1 vectorings of I = F' iterations from the
-leaves to the root. Node (q, p) at level q covers leaves p 2^(L-q) to
+bits), the arithmetic stage copies them into working registers of
+W = F + G bits, or vectors in place when a register already has W bits, and
+runs m - 1 vectorings of I = F iterations from the leaves to the root. Node
+(q, p) at level q covers leaves p 2^(L-q) to
 (p+1) 2^(L-q) - 1; its decision bits encode atan2(norm of right half, norm of
 left half). A leaf pair with v_2p < 0 is negated under a flag, which adds pi to
 its angle. The uncomputation is the exact reverse.
@@ -19,14 +19,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from .revcirc import (Circuit, BitSim, copy_view, shl, shift, add_view, csd,
+from .revcirc import (Circuit, BitSim, copy_view, shift, add_view, csd,
                       load_select, cordic_rotate, cordic_vector, cordic_gain,
                       to_int, reverse)
 
-
-def default_guard(F):
-    """Guard bits g = ceil(log2 F)."""
-    return int(np.ceil(np.log2(F)))
 
 
 def range_bits(L, vmax=1.0):
@@ -48,7 +44,6 @@ class Tree:
     """The circuit R on caller registers `regs` (m = 2^L of them).
 
     Options:
-      g      guard bits (internal fractional bits F' = F + g), default ceil(log2 F);
       G      integer bits of the working registers, sign included, default
              range_bits(L); the simulation checks that no value overflows;
       known  {(q, p): theta_c} declares node (q, p) a known-angle node: the
@@ -64,13 +59,12 @@ class Tree:
              negative; they get the sign flag of a leaf pair.
     """
 
-    def __init__(self, c, regs, F, g=None, G=None, known=None, signed=()):
+    def __init__(self, c, regs, F, G=None, known=None, signed=()):
         m = len(regs)
         L = int(np.log2(m))
         assert 2 ** L == m, "pad with zero registers to a power of 2"
         self.c, self.regs, self.F, self.m, self.L = c, regs, F, m, L
-        self.g = default_guard(F) if g is None else g
-        self.Fi = F + self.g                     # internal fractional bits F'
+        self.Fi = F
         self.I = self.Fi
         self.G = range_bits(L) if G is None else G
         self.W = W = self.Fi + self.G
@@ -86,19 +80,19 @@ class Tree:
         K = cordic_gain(self.I)
         n0, g0 = c.n, len(c.gates)
 
-        # working copies, shifted by g (CNOT only); a known leaf node reads its left entry only
+        # working copies, sign-extended (CNOT only); a known leaf node reads its left entry only
         skip = {2 * p + 1 for (q, p) in self.known if q == L - 1}
         xs, self.n_copies, used = [], 0, set()
         for l, r in enumerate(regs):
             if l in skip:
                 xs.append(None)
                 continue
-            if self.g == 0 and len(r) == W and r[0] not in used:
+            if len(r) == W and r[0] not in used:
                 xs.append(r)                     # no shift needed: vector in place,
                 used.add(r[0])                   # restored by the uncomputation
                 continue
             x = c.alloc(W)
-            copy_view(c, shl(r + [r[-1]] * (W - len(r)), self.g), x)
+            copy_view(c, r + [r[-1]] * (W - len(r)), x)
             xs.append(x)
             self.n_copies += 1
 
@@ -240,12 +234,12 @@ def _dirty_bits(sim, n, protected):
 class TreeCircuit:
     """R alone, on caller registers loaded with given values (rounded to F bits)."""
 
-    def __init__(self, L, F, g=None, G=None, w_in=None, known=None, signed=()):
+    def __init__(self, L, F, G=None, w_in=None, known=None, signed=()):
         c = Circuit()
         self.F = F
         self.w_in = F + 2 if w_in is None else w_in       # |v_i| < 2
         self.v = [c.alloc(self.w_in) for _ in range(2 ** L)]
-        self.tree = Tree(c, self.v, F, g, G, known, signed)
+        self.tree = Tree(c, self.v, F, G, known, signed)
         self.n_arith = len(c.gates)
         c.gates += reverse(c.gates)
         self.c = c

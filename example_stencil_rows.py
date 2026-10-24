@@ -2,7 +2,7 @@
 coefficient c(x) = 1 + sin(2 pi x)/2 on N = 1024 nodes x_j = j/N:
 v = (-c_{j-1/2}, c_{j-1/2} + c_{j+1/2}, -c_{j+1/2}, 0)/4, that is, angles
 theta_-+ = pi (2j -+ 1)/N and the rows of C below. Parts 1 and 2 simulated
-bit by bit over every row; default guard bits."""
+bit by bit over every row."""
 import numpy as np
 from binary_to_amplitude import SymbolVector, exact_unit
 
