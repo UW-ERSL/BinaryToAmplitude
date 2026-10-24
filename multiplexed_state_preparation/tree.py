@@ -1,4 +1,4 @@
-"""tree -- binary-to-amplitude conversion of an m-entry vector by a tree of
+"""tree -- conversion of an m-entry vector into amplitudes by a tree of
 CORDIC vectorings (the circuit R of the paper).
 
 Given m = 2^L value registers v_0..v_{m-1} (two's complement, F fractional

@@ -7,7 +7,7 @@
 3. The block itself: e^(i(phi1+phi2)) T c~(k) against Vhat(k) assembled element
    by element from the Q4 gradient, at N = 16, F = 24."""
 import numpy as np
-from binary_to_amplitude import poisson_isometry, exact_unit
+from multiplexed_state_preparation import poisson_isometry, exact_unit
 
 # 1. cost
 F, n = 45, 10

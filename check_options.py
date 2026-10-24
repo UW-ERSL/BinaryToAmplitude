@@ -9,7 +9,7 @@
    satisfy the declared relations.
 3. Overflow detection when G is too small."""
 import numpy as np
-from binary_to_amplitude import TreeCircuit, exact_unit
+from multiplexed_state_preparation import TreeCircuit, exact_unit
 
 
 def run(tc, V):

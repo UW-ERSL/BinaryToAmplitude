@@ -2,7 +2,7 @@
 v(k) = (sin(pi k_1/N), ..., sin(pi k_d/N)), angles theta_j = pi k_j / N and
 C selecting the sines. Parts 1 and 2 simulated bit by bit over every k != 0."""
 import numpy as np
-from binary_to_amplitude import SymbolVector, exact_unit
+from multiplexed_state_preparation import SymbolVector, exact_unit
 
 print(" d     N   F   err 2^F/N   trig err 2^F (bound)   R alone ||v|| 2^F   proven/measured")
 worst = dict(e=0, t=0, r=0)

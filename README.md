@@ -1,4 +1,4 @@
-# BinaryToAmplitude
+# MultiplexedStatePreparation
 
 Code for the paper *Multiplexed state preparation of the Fourier blocks of the
 periodic Poisson isometry* (K. Suresh, UW-Madison), the companion of *A
@@ -30,8 +30,8 @@ uses 44,424 Toffoli gates and 91 controlled rotations, with 5,672 work qubits.
 
 ## Install
 
-    git clone https://github.com/UW-ERSL/BinaryToAmplitude
-    cd BinaryToAmplitude
+    git clone https://github.com/UW-ERSL/MultiplexedStatePreparation
+    cd MultiplexedStatePreparation
     pip install -e .
 
 Only numpy is required.
@@ -40,7 +40,7 @@ Only numpy is required.
 
 ```python
 import numpy as np
-from binary_to_amplitude import poisson_isometry, exact_unit
+from multiplexed_state_preparation import poisson_isometry, exact_unit
 
 sv = poisson_isometry(n=6, F=24)                     # N = 64, F = 24 fractional bits
 amp, vreg, vex, treg, tex, checks = sv.simulate()    # gate-level arithmetic, every k != 0
@@ -96,15 +96,15 @@ print(tc.tree.toffoli(), tc.tree.rotation_counts())   # 18624, 91 ctrl Ry, 2 fix
 
 ## Package
 
-- `binary_to_amplitude/poisson.py`: the configuration of the paper
+- `multiplexed_state_preparation/poisson.py`: the configuration of the paper
   (`poisson_isometry`): the matrix C of c(k), G = 4, and the known-angle
   node (pi/4, 1/sqrt3).
-- `binary_to_amplitude/symbol.py`: Part 1 and the whole circuit for
+- `multiplexed_state_preparation/symbol.py`: Part 1 and the whole circuit for
   v(j) = C t(j) (`SymbolVector`), with the closed-form counts and the bounds of
   Lemma 2 and Corollary 6 of the paper.
-- `binary_to_amplitude/tree.py`: Part 2, the circuit R (`Tree`), and a driver
+- `multiplexed_state_preparation/tree.py`: Part 2, the circuit R (`Tree`), and a driver
   on given values (`TreeCircuit`).
-- `binary_to_amplitude/revcirc.py`: reversible fixed-point arithmetic (Gidney
+- `multiplexed_state_preparation/revcirc.py`: reversible fixed-point arithmetic (Gidney
   adders, CORDIC rotation and vectoring modes) and a bit-packed simulator that
   runs all inputs at once, from
   [QuantumHomogenizationPoisson](https://github.com/UW-ERSL/QuantumHomogenizationPoisson).

@@ -2,7 +2,7 @@
 Error column: max of ||v|| 2^F ||v~ - v/||v|| || over 4,096 inputs
 u 2^-e, u ~ U(-1, 1), e ~ U(0, F/2), seed 4."""
 import numpy as np
-from binary_to_amplitude import TreeCircuit, exact_unit
+from multiplexed_state_preparation import TreeCircuit, exact_unit
 
 F, B = 32, 4096
 rng = np.random.default_rng(4)

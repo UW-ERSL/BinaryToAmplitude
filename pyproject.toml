@@ -3,12 +3,12 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "binary_to_amplitude"
+name = "multiplexed_state_preparation"
 version = "0.1.0"
-description = "Binary-to-amplitude conversion of a vector by a tree of CORDIC vectorings"
+description = "Multiplexed state preparation by CORDIC arithmetic: entries from the index bits, amplitudes from the entries"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 dependencies = ["numpy"]
 
 [tool.setuptools]
-packages = ["binary_to_amplitude"]
+packages = ["multiplexed_state_preparation"]

@@ -2,7 +2,7 @@
 F = 32, compute plus uncompute. The counts do not depend on
 the index size N."""
 import numpy as np
-from binary_to_amplitude import SymbolVector
+from multiplexed_state_preparation import SymbolVector
 
 F, n = 32, 10
 

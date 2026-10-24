@@ -3,8 +3,8 @@
 zeta. Part 2: the node outputs and decision bits of the tree, the angles they
 encode, and the prepared amplitudes against c/||c||."""
 import numpy as np
-from binary_to_amplitude import poisson_isometry
-from binary_to_amplitude.revcirc import BitSim
+from multiplexed_state_preparation import poisson_isometry
+from multiplexed_state_preparation.revcirc import BitSim
 
 n, F, k = 4, 12, (3, 1)
 sv, N, u = poisson_isometry(n, F), 2 ** n, 2.0 ** -F

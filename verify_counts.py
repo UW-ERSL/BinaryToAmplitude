@@ -1,7 +1,7 @@
 """Sec. 5: assert the Toffoli and work-qubit counts against the gate lists, and
 check that the work register returns to zero and the inputs are unchanged."""
 import numpy as np
-from binary_to_amplitude import TreeCircuit
+from multiplexed_state_preparation import TreeCircuit
 
 rng = np.random.default_rng(0)
 print(" m   F   G   Toffoli (arith.)  work qubits  rot. Toffoli  ctrl. Ry  clean")
@@ -21,7 +21,7 @@ print("all counts match the formulas of Sec. 5")
 # Part 1: the counts of the full circuit against its gate lists, on random
 # angles and coefficient matrices, with the work register checked on every index
 print("\nPart 1 (SymbolVector): random angles p in {-3..3}^d, q in {-4..4}, random C")
-from binary_to_amplitude import SymbolVector, exact_unit
+from multiplexed_state_preparation import SymbolVector, exact_unit
 for trial in range(6):
     d, R, m0 = 1 + trial % 2, 1 + trial % 3, 2 + trial % 3
     n, F = 4, 16 + 4 * (trial % 3)
