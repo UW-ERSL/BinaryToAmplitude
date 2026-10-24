@@ -28,8 +28,10 @@ for name, val in (("angles phi1 +- phi2 (adder, subtractor)", t["angles"]),
                   ("rotation stage: selection of the omega bits", r["toffoli"])):
     print(f"  {name:48s} {val:7,d}")
 print(f"  {'total':48s} {total:7,d}")
+work = sv.c.n - 2 * n + r["temporaries"]
+assert work == 2 * F ** 2 + 35 * F + 47
 print(f"  rotations: {r['controlled_ry']} controlled, {r['fixed_ry']} fixed, {r['flag_z']} flag Z; "
-      f"work qubits {sv.c.n - 2 * n:,}")
+      f"work qubits {work:,} ({sv.c.n - 2 * n:,} arithmetic, {r['temporaries']} rotation stage)")
 
 # 2. error, 42 cases
 print("\n  N   F   max err 2^F/N   proven bound 2^F/N (max over k)")

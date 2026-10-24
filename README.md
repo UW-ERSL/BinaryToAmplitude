@@ -26,7 +26,7 @@ on two target qubits, controlled by the 2n qubits of k. It has two parts.
 
 There is no division, square root, or angle register, and the cost depends on
 the number of fractional bits F, not on N. At N = 1024 and F = 45 the circuit
-uses 44,424 Toffoli gates and 90 controlled rotations, with 5,625 work qubits.
+uses 44,424 Toffoli gates and 91 controlled rotations, with 5,672 work qubits.
 
 ## Install
 
@@ -91,7 +91,7 @@ Two options reduce the cost for a specific application; `poisson_isometry` uses 
 
 ```python
 tc = TreeCircuit(L=2, F=45, G=4, known={(1, 1): np.pi / 4})
-print(tc.tree.toffoli(), tc.tree.rotation_counts())   # 18624, 90 ctrl Ry, 3 fixed, 1 flag Z
+print(tc.tree.toffoli(), tc.tree.rotation_counts())   # 18624, 91 ctrl Ry, 2 fixed, 1 flag Z
 ```
 
 ## Package

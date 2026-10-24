@@ -24,7 +24,7 @@ F = 45
 t = TreeCircuit(2, F, G=4, known={(1, 1): np.pi / 4}).tree
 r = t.rotation_counts()
 assert t.toffoli() == t.formulas()["toffoli"] == 18624
-assert (r["controlled_ry"], r["fixed_ry"], r["flag_z"]) == (2 * F, 3, 1)
+assert (r["controlled_ry"], r["fixed_ry"], r["flag_z"]) == (2 * F + 1, 2, 1)
 print(f"F = {F}, G = 4, known (1,1) = pi/4: Toffoli {t.toffoli()} "
       f"(vectorings 2 x {4 * t.I * (t.W - 1)}, constant product "
       f"{2 * (t.W - 1) * (len(t.digits[(1, 1)]) - 1)}, s = {len(t.digits[(1, 1)])}); "

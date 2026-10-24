@@ -188,21 +188,25 @@ class Tree:
         Toffoli per (p, i); at level 0 the root bits are used directly. The
         leaf sign flags are selected the same way and take a Z gate. Each level
         applies R(A) to t_q if V_q is not empty and I rotations R(-2 alpha_i)
-        controlled by D_i; each known node adds the fixed rotation R(theta_c)
-        (or R(theta_c - A) when V_q is not empty), controlled by its prefix.
+        controlled by D_i; each known node adds the rotation R(theta_c) (or
+        R(theta_c - A) when V_q is not empty) by a fixed angle, controlled by
+        its prefix (uncontrolled at the root). `temporaries` counts the bits
+        D_i, the copies of the flags, and the ANDs of the unary iteration,
+        which are live during the stage only.
         """
         I, L = self.I, self.L
-        tof = ctrl = fixed = 0
+        tof = ctrl = fixed = tmp = 0
         for q in range(L):
             V = [p for p in range(2 ** q) if (q, p) in self.dbits]
             C = [p for p in range(2 ** q) if (q, p) in self.known]
             nflag = len(self.flags) if q == L - 1 else 0
             if q >= 1 and (V or nflag):
                 tof += 2 * (2 ** q - 1) + I * len(V) + nflag
-            ctrl += I if V else 0
-            fixed += (1 if V else 0) + len(C)
+                tmp = max(tmp, (2 ** q - 1) + I * len(V) + nflag)
+            ctrl += (I if V else 0) + (len(C) if q >= 1 else 0)
+            fixed += (1 if V else 0) + (len(C) if q == 0 else 0)
         return dict(toffoli=tof, controlled_ry=ctrl, fixed_ry=fixed,
-                    flag_z=len(self.flags))
+                    flag_z=len(self.flags), temporaries=tmp)
 
 
 def _const_product(c, src, M, F):
