@@ -34,7 +34,7 @@ uses 44,424 Toffoli gates and 91 controlled rotations, with 5,672 work qubits.
     cd MultiplexedStatePreparation
     pip install -e .
 
-Only numpy is required.
+Only numpy is required; `plot_error.py` also needs matplotlib.
 
 ## Quick start
 
@@ -57,6 +57,7 @@ print(checks, f"{err:.2e}", sv.toffoli())
 | `check_rotation.py` | Lemma 2 (rotation mode): the bound and the residual angle on random angles | seconds |
 | `check_lemma.py` | Lemma 3 (one vectoring): every inequality of the proof on random integer vectorings | seconds |
 | `verify_counts.py` | Sec. 5: Toffoli and work-qubit counts of Parts 1 and 2 asserted against the gate lists; work register returns to zero | about 10 seconds |
+| `plot_error.py` | Sec. 4, Figure 4 (`figs/error.pdf`): the error at every k for N = 64, F = 24, below 16 2^-F/||c||; the largest error over k divided by N 2^-F in the 42 cases, at most 5.73 (N = 4) and 1.89 for N >= 16 | about 15 seconds |
 
 The class behind `poisson_isometry` is more general: `SymbolVector` prepares
 v(j)/||v(j)|| for v(j) = C t(j), t(j) = (1, cos theta_1, sin theta_1, ...),
