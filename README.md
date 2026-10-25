@@ -54,6 +54,7 @@ print(checks, f"{err:.2e}", sv.toffoli())
 |---|---|---|
 | `example_poisson_isometry.py` | Theorem 1 and Table 1 (cost by stage at N = 1024, F = 45); Sec. 4, the measured error in the 42 cases and the bound of Corollary 6; the check of the whole block against the Q4 assembly | a few minutes |
 | `example_worked.py` | Secs. 2 and 3, the worked example at k = (3, 1), N = 16, F = 12: the bit strings of a, b, zeta, the decision bits, the angles, and the amplitudes | seconds |
+| `table_options.py` | Sec. 5, Table 3: the circuit against the multiplexor of standard state preparation and the QROM table lookup (estimates from published cost formulas, `multiplexed_state_preparation/alternatives.py`), N = 8 to 4096, at the accuracy of the companion paper; asserts the crossovers stated in the paper | about 1 second |
 | `check_rotation.py` | Lemma 2 (rotation mode): the bound and the residual angle on random angles | seconds |
 | `check_lemma.py` | Lemma 3 (one vectoring): every inequality of the proof on random integer vectorings | seconds |
 | `verify_counts.py` | Sec. 5: Toffoli and work-qubit counts of Parts 1 and 2 asserted against the gate lists; work register returns to zero | about 10 seconds |
